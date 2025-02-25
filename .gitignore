@@ -1,0 +1,5 @@
+# Ignore these Files
+audio/
+annotation/
+__pycache__/
+EOF
