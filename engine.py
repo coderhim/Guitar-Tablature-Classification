@@ -109,8 +109,8 @@ def validate_model(model, val_loader, criterion):
 
 if __name__ == '__main__':
     # Load data
-    audio_dir = r'D:\Code playground\seminar_audioTab_\cqt_audio'
-    annotation_dir = r'D:\Code playground\seminar_audioTab_\tablature_segments'
+    audio_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
+    annotation_dir = r'/content/Guitar-Tablature-Classification/tablature_segments'
 
     train_loader, val_loader, test_loader = my_dataloader.create_dataloaders(audio_dir, annotation_dir)
 
