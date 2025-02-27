@@ -5,19 +5,6 @@ from torch.utils.data import DataLoader
 from model import GuitarTabNet
 import my_dataloader
 
-# Hyperparameters
-input_shape = (1, 96, 9)  # Channel, Height, Width
-epochs = 30
-learning_rate = 0.01
-momentum = 0.8
-decay = learning_rate / epochs
-
-# Initialize model, optimizer, and loss function
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = GuitarTabNet(input_shape).to(device)
-
-optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=decay)
-criterion = nn.CrossEntropyLoss()
 
 def train_model(model, train_loader, val_loader, criterion, optimizer, epochs):
     for epoch in range(epochs):
@@ -109,8 +96,8 @@ def validate_model(model, val_loader, criterion):
 
 if __name__ == '__main__':
     # Load data
-    audio_dir = r'D:\Code playground\seminar_audioTab_\cqt_audio'
-    annotation_dir = r'D:\Code playground\seminar_audioTab_\tablature_segments'
+    audio_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
+    annotation_dir = r'/content/Guitar-Tablature-Classification/tablature_segments'
 
     train_loader, val_loader, test_loader = my_dataloader.create_dataloaders(audio_dir, annotation_dir)
 
@@ -119,6 +106,18 @@ if __name__ == '__main__':
         print("Audio shape:", audio.shape)
         print("Head shapes:", [h.shape for h in heads])
         break
-
+    # Hyperparameters
+    input_shape = (1, 96, 9)  # Channel, Height, Width
+    epochs = 30
+    learning_rate = 0.01
+    momentum = 0.8
+    decay = learning_rate / epochs
+    
+    # Initialize model, optimizer, and loss function
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = GuitarTabNet(input_shape).to(device)
+    
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=decay)
+    criterion = nn.CrossEntropyLoss()
     # Start training
     train_model(model, train_loader, val_loader, criterion, optimizer, epochs)
