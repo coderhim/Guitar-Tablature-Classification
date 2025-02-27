@@ -48,13 +48,13 @@ def frequency_mask(audio, num_masks=1, max_width=10):
     return audio
 
 def time_mask(audio, num_masks=1, max_width=10):
-    """Apply time masking (works on time dimension)"""
-    for i in range(num_masks):
-        time_dim = audio.shape[1]  # Assuming audio shape is [batch, time, freq]
-        t = random.randint(0, max_width)
+    for _ in range(num_masks):
+        time_dim = audio.shape[2]  # Adjust for 4D input (batch, channels, time, freq)
+        t = random.randint(0, min(max_width, time_dim))  # Ensure valid range
         t0 = random.randint(0, time_dim - t)
-        audio[:, t0:t0+t, :] = 0
+        audio[:, :, t0:t0 + t, :] = 0
     return audio
+
 
 def augment_batch(batch, augment_prob=0.5):
     """Apply multiple augmentations with some probability"""
@@ -219,7 +219,9 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
         
         for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} - Training"):
             inputs = inputs.to(device)
-            
+            # Ensure input is (Batch, Channels, Time, Frequency)
+            inputs = inputs.unsqueeze(1)  # (32, 1, 96, 9)
+
             # Apply data augmentation
             inputs = augment_batch(inputs)
             
