@@ -22,15 +22,20 @@ def set_seed(seed=42):
 
 set_seed()
 
-# Data augmentation functions
 def time_shift(audio, shift_range=0.1):
     """Randomly shift audio in time"""
-    shift = int(random.uniform(-shift_range, shift_range) * audio.shape[1])
+    time_dim = audio.shape[2]
+    if time_dim < 2:  
+        return audio  # Skip if time dimension is too small
+    
+    shift = int(random.uniform(-shift_range, shift_range) * time_dim)
     if shift > 0:
-        audio_shifted = torch.cat([audio[:, shift:], torch.zeros_like(audio[:, :shift])], dim=1)
-    else:
+        audio_shifted = torch.cat([audio[:, :, shift:, :], torch.zeros_like(audio[:, :, :shift, :])], dim=2)
+    elif shift < 0:
         shift = abs(shift)
-        audio_shifted = torch.cat([torch.zeros_like(audio[:, :shift]), audio[:, :-shift]], dim=1)
+        audio_shifted = torch.cat([torch.zeros_like(audio[:, :, :shift, :]), audio[:, :, :-shift, :]], dim=2)
+    else:
+        audio_shifted = audio  # No shift
     return audio_shifted
 
 def add_noise(audio, noise_level=0.005):
@@ -38,29 +43,43 @@ def add_noise(audio, noise_level=0.005):
     noise = torch.randn_like(audio) * noise_level
     return audio + noise
 
-def frequency_mask(audio, num_masks=1, max_width=10):
-    """Apply frequency masking (works on frequency dimension)"""
-    for i in range(num_masks):
-        freq_dim = audio.shape[2]  # Assuming audio shape is [batch, time, freq]
-        f = random.randint(0, max_width)
+def frequency_mask(audio, num_masks=1, max_width=5):
+    """Apply frequency masking"""
+    freq_dim = audio.shape[3]  # Frequency dimension
+    if freq_dim < 2:  
+        return audio  # Skip if frequency dimension is too small
+    
+    for _ in range(num_masks):
+        max_width = min(max_width, freq_dim)  # Ensure valid range
+        if max_width < 1:
+            continue  # Skip if there's no room to mask
+        
+        f = random.randint(1, max_width)
         f0 = random.randint(0, freq_dim - f)
-        audio[:, :, f0:f0+f] = 0
+        audio[:, :, :, f0:f0 + f] = 0
     return audio
 
 def time_mask(audio, num_masks=1, max_width=10):
+    """Apply time masking"""
+    time_dim = audio.shape[2]  # Time dimension
+    if time_dim < 2:  
+        return audio  # Skip if time dimension is too small
+    
     for _ in range(num_masks):
-        time_dim = audio.shape[2]  # Adjust for 4D input (batch, channels, time, freq)
-        t = random.randint(0, min(max_width, time_dim))  # Ensure valid range
+        max_width = min(max_width, time_dim)  # Ensure valid range
+        if max_width < 1:
+            continue  # Skip if there's no room to mask
+        
+        t = random.randint(1, max_width)
         t0 = random.randint(0, time_dim - t)
         audio[:, :, t0:t0 + t, :] = 0
     return audio
 
-
 def augment_batch(batch, augment_prob=0.5):
     """Apply multiple augmentations with some probability"""
     if random.random() < augment_prob:
-        # Apply one or more augmentations
         augmentations = [time_shift, add_noise, frequency_mask, time_mask]
+        
         # Apply 1-3 random augmentations
         num_augs = random.randint(1, 3)
         selected_augs = random.sample(augmentations, num_augs)
@@ -69,7 +88,6 @@ def augment_batch(batch, augment_prob=0.5):
             batch = aug_func(batch)
     
     return batch
-
 # Normalization functions
 def min_max_normalize(batch):
     """Min-max normalization to [0, 1] range"""
@@ -161,7 +179,11 @@ class ImprovedGuitarTabModel(nn.Module):
         
         # Shared fully connected layers
         x = self.dropout1(x)
+        # print("Final shape before fc1:", x.shape)
+
         x = F.leaky_relu(self.bn_fc1(self.fc1(x)), negative_slope=0.1)
+        # print("Final shape after fc1:", x.shape)
+
         x = self.dropout2(x)
         x = F.leaky_relu(self.bn_fc2(self.fc2(x)), negative_slope=0.1)
         
@@ -221,10 +243,10 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             inputs = inputs.to(device)
             # Ensure input is (Batch, Channels, Time, Frequency)
             inputs = inputs.unsqueeze(1)  # (32, 1, 96, 9)
-
+            # print("Input shape before augmentation:", inputs.shape)
             # Apply data augmentation
             inputs = augment_batch(inputs)
-            
+            # print("Input shape after augmentation:", inputs.shape)
             # Apply normalization
             inputs = db_normalize(inputs)
             
