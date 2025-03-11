@@ -372,9 +372,9 @@ if __name__ == '__main__':
     # process_aligned_dataset(audio_folder, jams_folder, output_folder)
     
     # Option 2: If you already have CQT segments and just need matching tablatures
-    audio_segments_folder = "/content/Guitar-Tablature-Classification/cqt_audio"
-    jams_folder = "/content/Guitar-Tablature-Classification/annotation"
-    tab_output_folder = "content/tablature_segments"
+    audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_audio"
+    jams_folder = r"D:\Code playground\seminar_audioTab_\annotation"
+    tab_output_folder = r"D:\Code playground\seminar_audioTab_\tablature_segments"
     # audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_audio"
     # jams_folder = r"D:\Code playground\seminar_audioTab_\annotation"
     # tab_output_folder = r"D:\Code playground\seminar_audioTab_\tablature_segments"
