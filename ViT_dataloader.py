@@ -4,7 +4,7 @@ import numpy as np
 import os
 
 class GuitarTabDataset(Dataset):
-    def __init__(self, audio_dir, annotation_dir, img_size=(224, 224)):
+    def __init__(self, audio_dir, annotation_dir, img_size=(128, 128)):
         self.audio_files = sorted([f for f in os.listdir(audio_dir) if f.endswith('.npy')])
         self.annotation_files = sorted([f for f in os.listdir(annotation_dir) if f.endswith('.npy')])
 
@@ -21,22 +21,29 @@ class GuitarTabDataset(Dataset):
         audio_path = os.path.join(self.audio_dir, self.audio_files[idx])
         annotation_path = os.path.join(self.annotation_dir, self.annotation_files[idx])
 
-        # Load audio (e.g., spectrogram) and annotations
+        # Load audio and annotations
         audio = np.load(audio_path, mmap_mode='r').astype(np.float32)
         annotation = np.load(annotation_path, mmap_mode='r').astype(np.float32)
 
-        # Ensure tensors are contiguous for efficient GPU use
+        # Ensure tensors are contiguous for efficient GPU usage
         audio = torch.tensor(np.ascontiguousarray(audio))
 
-        # Resize to ViT input size (224x224 by default)
-        audio = torch.nn.functional.interpolate(audio.unsqueeze(0), size=self.img_size, mode='bilinear', align_corners=False).squeeze(0)
+        # Ensure 3-channel input for ViT
+        audio = audio.unsqueeze(0)  # (H, W) → (1, H, W)
+        # audio = audio.repeat(3, 1, 1)  # (1, H, W) → (3, H, W)
 
-        # Split annotations into six output heads
-        heads = [torch.tensor(np.ascontiguousarray(annotation[i])) for i in range(6)]
+        # Resize using bicubic interpolation for better quality
+        audio = torch.nn.functional.interpolate(audio.unsqueeze(0), size=self.img_size, mode='bicubic', align_corners=False).squeeze(0)
+
+        # Normalize to [-1, 1] for ViT input
+        # audio = (audio - 0.5) / 0.5
+
+        # Ensure annotation tensors are also contiguous
+        heads = [torch.tensor(np.ascontiguousarray(annotation[i])).unsqueeze(0) for i in range(6)]
 
         return audio, heads
 
-def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8, val_ratio=0.1, img_size=(224, 224)):
+def create_dataloaders(audio_dir, annotation_dir, batch_size=16, train_ratio=0.8, val_ratio=0.1, img_size=(128, 128)):
     dataset = GuitarTabDataset(audio_dir, annotation_dir, img_size)
 
     # Split dataset into train, validation, and test
@@ -49,10 +56,8 @@ def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8
     # DataLoader configuration
     loader_args = {
         'batch_size': batch_size,
-        # 'num_workers': min(4, os.cpu_count() // 2),
-        #   # Efficient CPU usage
         'num_workers': 8,
-        'pin_memory': torch.cuda.is_available(),     # Optimize GPU transfers
+        'pin_memory': torch.cuda.is_available(),
         'prefetch_factor': 4,
     }
 

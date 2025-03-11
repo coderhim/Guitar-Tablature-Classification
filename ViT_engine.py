@@ -12,7 +12,7 @@ import time
 from tqdm import tqdm
 import my_dataloader
 from transformers import ViTModel, ViTConfig, ViTFeatureExtractor
-
+from ViT_model import ViTGuitarTabModel
 # Set seeds for reproducibility
 def set_seed(seed=42):
     random.seed(seed)
@@ -116,104 +116,104 @@ def db_normalize(batch, ref_db=-120.0):
     normalized = (batch - ref_db) / (-ref_db)
     return torch.clamp(normalized, 0, 1)  # Ensure values stay in [0, 1]
 
-# New model using Vision Transformer
-class ViTGuitarTabModel(nn.Module):
-    def __init__(self, num_classes=19, dropout_rate=0.3, pretrained_model="google/vit-base-patch16-224"):
-        super(ViTGuitarTabModel, self).__init__()
+# # New model using Vision Transformer
+# class ViTGuitarTabModel(nn.Module):
+#     def __init__(self, num_classes=19, dropout_rate=0.3, pretrained_model="google/vit-base-patch16-224"):
+#         super(ViTGuitarTabModel, self).__init__()
         
-        # Load pre-trained ViT model
-        self.vit = ViTModel.from_pretrained(pretrained_model)
+#         # Load pre-trained ViT model
+#         self.vit = ViTModel.from_pretrained(pretrained_model)
         
-        # Freeze the base ViT model if needed (optional)
-        # Uncomment the following line to freeze the base model
-        # for param in self.vit.parameters():
-        #    param.requires_grad = False
+#         # Freeze the base ViT model if needed (optional)
+#         # Uncomment the following line to freeze the base model
+#         # for param in self.vit.parameters():
+#         #    param.requires_grad = False
         
-        # Get the dimensionality of the ViT's output
-        vit_output_dim = self.vit.config.hidden_size  # typically 768 for base model
+#         # Get the dimensionality of the ViT's output
+#         vit_output_dim = self.vit.config.hidden_size  # typically 768 for base model
         
-        # Shared layers after ViT backbone
-        self.dropout1 = nn.Dropout(dropout_rate)
-        self.fc1 = nn.Linear(vit_output_dim, 512)
-        self.bn_fc1 = nn.BatchNorm1d(512)
-        self.dropout2 = nn.Dropout(dropout_rate)
-        self.fc2 = nn.Linear(512, 256)
-        self.bn_fc2 = nn.BatchNorm1d(256)
+#         # Shared layers after ViT backbone
+#         self.dropout1 = nn.Dropout(dropout_rate)
+#         self.fc1 = nn.Linear(vit_output_dim, 512)
+#         self.bn_fc1 = nn.BatchNorm1d(512)
+#         self.dropout2 = nn.Dropout(dropout_rate)
+#         self.fc2 = nn.Linear(512, 256)
+#         self.bn_fc2 = nn.BatchNorm1d(256)
         
-        # String-specific heads (one for each guitar string)
-        self.string_heads = nn.ModuleList([
-            nn.Sequential(
-                nn.Dropout(dropout_rate/2),  # Less dropout in the final layers
-                nn.Linear(256, num_classes)
-            ) for _ in range(6)  # 6 guitar strings
-        ])
+#         # String-specific heads (one for each guitar string)
+#         self.string_heads = nn.ModuleList([
+#             nn.Sequential(
+#                 nn.Dropout(dropout_rate/2),  # Less dropout in the final layers
+#                 nn.Linear(256, num_classes)
+#             ) for _ in range(6)  # 6 guitar strings
+#         ])
         
-        # Initialize weights for our custom layers
-        self._init_custom_weights()
+#         # Initialize weights for our custom layers
+#         self._init_custom_weights()
         
-    def _init_custom_weights(self):
-        # Initialize weights for the fully connected layers
-        for m in [self.fc1, self.fc2]:
-            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
-            if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+#     def _init_custom_weights(self):
+#         # Initialize weights for the fully connected layers
+#         for m in [self.fc1, self.fc2]:
+#             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
+#             if m.bias is not None:
+#                 nn.init.constant_(m.bias, 0)
                 
-        for m in [self.bn_fc1, self.bn_fc2]:
-            nn.init.constant_(m.weight, 1)
-            nn.init.constant_(m.bias, 0)
+#         for m in [self.bn_fc1, self.bn_fc2]:
+#             nn.init.constant_(m.weight, 1)
+#             nn.init.constant_(m.bias, 0)
             
-        # Initialize string head layers
-        for head in self.string_heads:
-            for layer in head:
-                if isinstance(layer, nn.Linear):
-                    nn.init.kaiming_normal_(layer.weight, mode='fan_out', nonlinearity='leaky_relu')
-                    if layer.bias is not None:
-                        nn.init.constant_(layer.bias, 0)
+#         # Initialize string head layers
+#         for head in self.string_heads:
+#             for layer in head:
+#                 if isinstance(layer, nn.Linear):
+#                     nn.init.kaiming_normal_(layer.weight, mode='fan_out', nonlinearity='leaky_relu')
+#                     if layer.bias is not None:
+#                         nn.init.constant_(layer.bias, 0)
     
-    def reshape_for_vit(self, x):
-        """Reshape input to match ViT's expected input format"""
-        batch_size = x.shape[0]
+    # def reshape_for_vit(self, x):
+    #     """Reshape input to match ViT's expected input format"""
+    #     batch_size = x.shape[0]
         
-        # Check input shape
-        if x.dim() == 3:  # [batch, time, freq]
-            x = x.unsqueeze(1)  # Add channel dim: [batch, channel, time, freq]
+    #     # Check input shape
+    #     if x.dim() == 3:  # [batch, time, freq]
+    #         x = x.unsqueeze(1)  # Add channel dim: [batch, channel, time, freq]
         
-        # ViT expects input shape [batch_size, channels, height, width]
-        # where height and width are typically 224x224 for standard ViT models
+    #     # ViT expects input shape [batch_size, channels, height, width]
+    #     # where height and width are typically 224x224 for standard ViT models
         
-        # Resize to 224x224 if needed
-        if x.shape[2] != 224 or x.shape[3] != 224:
-            # Option 1: Use interpolate to resize
-            x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
+    #     # Resize to 224x224 if needed
+    #     if x.shape[2] != 224 or x.shape[3] != 224:
+    #         # Option 1: Use interpolate to resize
+    #         x = F.interpolate(x, size=(224, 224), mode='bicubic', align_corners=False)
             
-        # If we have only 1 channel, repeat it to create 3 channels (RGB)
-        if x.shape[1] == 1:
-            x = x.repeat(1, 3, 1, 1)
+    #     # If we have only 1 channel, repeat it to create 3 channels (RGB)
+    #     if x.shape[1] == 1:
+    #         x = x.repeat(1, 3, 1, 1)
             
-        return x
+    #     return x
     
-    def forward(self, x):
-        # Reshape for ViT
-        x = self.reshape_for_vit(x)
+    # def forward(self, x):
+    #     # Reshape for ViT
+    #     x = self.reshape_for_vit(x)
         
-        # Forward pass through ViT
-        outputs = self.vit(pixel_values=x)
+    #     # Forward pass through ViT
+    #     outputs = self.vit(pixel_values=x)
         
-        # Get the [CLS] token output which represents the entire sequence
-        x = outputs.last_hidden_state[:, 0]  # Shape: [batch_size, hidden_size]
+    #     # Get the [CLS] token output which represents the entire sequence
+    #     x = outputs.last_hidden_state[:, 0]  # Shape: [batch_size, hidden_size]
         
-        # Shared fully connected layers
-        x = self.dropout1(x)
-        x = F.leaky_relu(self.bn_fc1(self.fc1(x)), negative_slope=0.1)
-        x = self.dropout2(x)
-        x = F.leaky_relu(self.bn_fc2(self.fc2(x)), negative_slope=0.1)
+    #     # Shared fully connected layers
+    #     x = self.dropout1(x)
+    #     x = F.leaky_relu(self.bn_fc1(self.fc1(x)), negative_slope=0.1)
+    #     x = self.dropout2(x)
+    #     x = F.leaky_relu(self.bn_fc2(self.fc2(x)), negative_slope=0.1)
         
-        # Apply each string head
-        outputs = []
-        for head in self.string_heads:
-            outputs.append(head(x))
+    #     # Apply each string head
+    #     outputs = []
+    #     for head in self.string_heads:
+    #         outputs.append(head(x))
             
-        return outputs
+    #     return outputs
 
 # LabelSmoothingLoss (keep this from your original code)
 class LabelSmoothingLoss(nn.Module):
@@ -275,7 +275,7 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
                 inputs = inputs.unsqueeze(1)  # (batch, 1, time, freq)
                 
             # Apply data augmentation
-            inputs = augment_batch(inputs)
+            # inputs = augment_batch(inputs)
             
             # Apply normalization
             inputs = db_normalize(inputs)
@@ -493,6 +493,7 @@ def plot_training_metrics(train_losses, val_losses, string_accuracies):
     plt.grid(True)
     
     plt.tight_layout()
+    plt.show()
     plt.savefig('vit_training_metrics.png')
     plt.close()
 
@@ -510,6 +511,7 @@ def plot_confusion_matrices(all_preds, all_targets):
             plt.ylabel('True')
     
     plt.tight_layout()
+    plt.show()
     plt.savefig('vit_confusion_matrices.png')
     plt.close()
 
