@@ -106,19 +106,30 @@ def jams_to_tablature(jams_file, start=0, stop=0.2):
         MIDI_val = extract_midi_from_jams(jam, start, stop)
 
         if MIDI_val.size == 0:
-            return np.zeros((6, 18), dtype=np.int32)
+            return np.ones((6, 19), dtype=np.int32)  # All rows indicate no note
 
         f_row, f_col = notes_to_fret(MIDI_val)
         optimal_solution = optimum_strings(f_row, f_col)
-        
+
+        # Initialize output with 1s in the first column (no note) and zeros elsewhere
+        tab_matrix = np.zeros((6, 19), dtype=np.int32)
+        tab_matrix[:, 0] = 1
+
         if isinstance(optimal_solution, np.ndarray) and optimal_solution.size > 0:
-            return create_tablature(f_row, optimal_solution)
-        else:
-            return np.zeros((6, 18), dtype=np.int32)
+            raw_tab = create_tablature(f_row, optimal_solution)
+
+            # For each string (row), check if a note exists and update the first column
+            for string in range(6):
+                if np.any(raw_tab[string] > 0):
+                    tab_matrix[string, 0] = 0  # Note exists
+                tab_matrix[string, 1:] = raw_tab[string]
+
+        return tab_matrix
 
     except Exception as e:
         print(f"Error processing {jams_file} at time {start}-{stop}: {e}")
-        return np.zeros((6, 18), dtype=np.int32)
+        return np.ones((6, 19), dtype=np.int32)  # Return matrix indicating no note
+
 
 # def cqt_lim(CQT):
 #     new_CQT = np.copy(CQT)
@@ -361,8 +372,11 @@ if __name__ == '__main__':
     # process_aligned_dataset(audio_folder, jams_folder, output_folder)
     
     # Option 2: If you already have CQT segments and just need matching tablatures
-    audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_audio"
-    jams_folder = r"D:\Code playground\seminar_audioTab_\annotation"
-    tab_output_folder = r"D:\Code playground\seminar_audioTab_\tablature_segments"
+    audio_segments_folder = r"\content\Guitar-Tablature-Classification\cqt_audio"
+    jams_folder = r"\content\Guitar-Tablature-Classification\annotation"
+    tab_output_folder = r"content\tablature_segments"
+    # audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_audio"
+    # jams_folder = r"D:\Code playground\seminar_audioTab_\annotation"
+    # tab_output_folder = r"D:\Code playground\seminar_audioTab_\tablature_segments"
     
     align_existing_segments(audio_segments_folder, jams_folder, tab_output_folder)

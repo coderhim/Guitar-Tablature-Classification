@@ -470,22 +470,34 @@ def plot_training_metrics(train_losses, val_losses, string_accuracies):
     plt.savefig('training_metrics.png')
     plt.close()
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+
 def plot_confusion_matrices(all_preds, all_targets):
-    """Plot confusion matrices for each string."""
-    plt.figure(figsize=(20, 15))
+    """
+    Plot confusion matrices for each string (6 classes) and display them inline in Google Colab.
     
+    Parameters:
+    - all_preds: List of predictions for each string (length 6).
+    - all_targets: List of true labels for each string (length 6).
+    """
+    plt.figure(figsize=(20, 15))
+
     for i in range(6):
         if len(all_preds[i]) > 0:
             cm = confusion_matrix(all_targets[i], all_preds[i])
-            plt.subplot(2, 3, i+1)
+            plt.subplot(2, 3, i + 1)
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-            plt.title(f'Confusion Matrix - String {i+1}')
+            plt.title(f'Confusion Matrix - String {i + 1}')
             plt.xlabel('Predicted')
             plt.ylabel('True')
-    
+
     plt.tight_layout()
-    plt.savefig('confusion_matrices.png')
-    plt.close()
+    plt.show()  # Display in Colab
+    plt.savefig('/content/confusion_matrices.png')  # Save in Colab's filesystem
+    print("Confusion matrices saved as 'confusion_matrices.png'")
+
 
 def test_model(model, test_loader, device):
     model.eval()
