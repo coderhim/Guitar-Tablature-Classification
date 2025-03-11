@@ -298,7 +298,7 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             optimizer.zero_grad()
             
             # Forward pass
-            check_tensor(inputs, "Model input")
+            # check_tensor(inputs, "Model input")
             outputs = model(inputs)
             
             # Calculate loss
