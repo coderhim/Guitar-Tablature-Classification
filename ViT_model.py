@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from transformers import ViTModel, ViTImageProcessor
 
 class ViTGuitarTabModel(nn.Module):
-    def __init__(self, num_classes=19, dropout_rate=0.3, pretrained_model="facebook/dino-vit-small-patch8"):
+    def __init__(self, num_classes=19, dropout_rate=0.3, pretrained_model="facebook/dino-vits8"):
         super(ViTGuitarTabModel, self).__init__()
         
         # Load pre-trained ViT model & processor

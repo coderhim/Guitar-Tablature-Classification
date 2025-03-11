@@ -558,7 +558,7 @@ def main():
     # Create model and move to device
     # model = ViTGuitarTabModel(num_classes=19, pretrained_model="google/vit-base-patch16-224")
     # Instantiate the model using facebook/dino-vit-small-patch8
-    model = ViTGuitarTabModel(num_classes=19, pretrained_model="facebook/dino-vit-small-patch8")
+    model = ViTGuitarTabModel(num_classes=19, pretrained_model="facebook/dino-vits8")
 
     model = model.to(device)
     print(model)
