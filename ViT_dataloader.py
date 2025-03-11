@@ -43,7 +43,7 @@ class GuitarTabDataset(Dataset):
 
         return audio, heads
 
-def create_dataloaders(audio_dir, annotation_dir, batch_size=16, train_ratio=0.8, val_ratio=0.1, img_size=(128, 128)):
+def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8, val_ratio=0.1, img_size=(128, 128)):
     dataset = GuitarTabDataset(audio_dir, annotation_dir, img_size)
 
     # Split dataset into train, validation, and test
