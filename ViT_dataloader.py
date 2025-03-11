@@ -29,7 +29,7 @@ class GuitarTabDataset(Dataset):
         annotation = np.load(annotation_path, mmap_mode='r').astype(np.float32)
 
         # Ensure tensors are contiguous for efficient GPU usage
-        audio = torch.tensor(np.ascontiguousarray(audio))
+        # audio = torch.tensor(np.ascontiguousarray(audio))
 
         # Ensure 3-channel input for ViT
         audio = audio.unsqueeze(0)  # (H, W) → (1, H, W)
