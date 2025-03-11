@@ -75,7 +75,7 @@ class ViTGuitarTabModel(nn.Module):
         # inputs = self.processor(images=x, return_tensors="pt")
     
         # Print shape information for debugging
-        print(f"Input tensor shape: {x.shape}")
+        # print(f"Input tensor shape: {x.shape}")
         
         # # Normalize data to [0, 1] range (if not already done in preprocessing)
         # x_normalized = (x + 120) / 120

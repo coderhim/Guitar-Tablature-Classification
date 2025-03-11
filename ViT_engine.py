@@ -282,7 +282,7 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
                 
             # Apply data augmentation
             # inputs = augment_batch(inputs)
-            print(inputs)
+            # print(inputs)
             # Apply normalization
             # inputs = db_normalize(inputs)
             
