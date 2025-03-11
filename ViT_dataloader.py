@@ -56,7 +56,7 @@ class GuitarTabDataset(Dataset):
         return audio_tensor, heads
 
 
-def create_dataloaders(audio_dir, annotation_dir, batch_size=45, train_ratio=0.8, val_ratio=0.1, img_size=(224, 224)):
+def create_dataloaders(audio_dir, annotation_dir, batch_size=50, train_ratio=0.8, val_ratio=0.1, img_size=(224, 224)):
     dataset = GuitarTabDataset(audio_dir, annotation_dir, img_size)
 
     # Split dataset into train, validation, and test
