@@ -10,7 +10,7 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import time
 from tqdm import tqdm
-import my_dataloader
+from ViT_dataloader import create_dataloaders
 from transformers import ViTModel, ViTConfig, ViTFeatureExtractor
 from ViT_model import ViTGuitarTabModel
 # Set seeds for reproducibility
@@ -284,7 +284,7 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             # inputs = augment_batch(inputs)
             print(inputs)
             # Apply normalization
-            inputs = db_normalize(inputs)
+            # inputs = db_normalize(inputs)
             
             # Process labels
             target_indices = []
@@ -574,7 +574,7 @@ def main():
     audio_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
     annotation_dir = r'/content/Guitar-Tablature-Classification/tablature_segments'
 
-    train_loader, val_loader, test_loader = my_dataloader.create_dataloaders(audio_dir, annotation_dir)
+    train_loader, val_loader, test_loader = create_dataloaders(audio_dir, annotation_dir)
     
     # Train the model
     trained_model, best_epoch, final_accuracies = train_model(
