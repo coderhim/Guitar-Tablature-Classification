@@ -30,7 +30,7 @@ class GuitarTabDataset(Dataset):
 
         return audio, heads
 
-def create_dataloaders(audio_dir, annotation_dir, batch_size=100, train_ratio=0.8, val_ratio=0.1):
+def create_dataloaders(audio_dir, annotation_dir, batch_size=64, train_ratio=0.7, val_ratio=0.2):
     dataset = GuitarTabDataset(audio_dir, annotation_dir)
 
     # Split dataset into training, validation, and testing
@@ -43,8 +43,9 @@ def create_dataloaders(audio_dir, annotation_dir, batch_size=100, train_ratio=0.
     # Optimize DataLoader for CPU-based training
     loader_args = {
         'batch_size': batch_size,
-        'num_workers': os.cpu_count() // 2,  # Use half of available CPU cores
-        'pin_memory': False,                 # Avoid pinning memory on CPU
+        # 'num_workers': os.cpu_count() // 2,  # Use half of available CPU cores
+        'num_workers': 12,  # Use half of available CPU cores
+        'pin_memory': True,                 # Avoid pinning memory on CPU
         'prefetch_factor': 2,                # Preload batches
     }
 

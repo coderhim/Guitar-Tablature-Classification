@@ -245,7 +245,7 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             inputs = inputs.unsqueeze(1)  # (32, 1, 96, 9)
             # print("Input shape before augmentation:", inputs.shape)
             # Apply data augmentation
-            inputs = augment_batch(inputs)
+            # inputs = augment_batch(inputs)
             # print("Input shape after augmentation:", inputs.shape)
             # Apply normalization
             inputs = db_normalize(inputs)

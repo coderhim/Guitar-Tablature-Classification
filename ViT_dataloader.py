@@ -49,9 +49,11 @@ def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8
     # DataLoader configuration
     loader_args = {
         'batch_size': batch_size,
-        'num_workers': min(4, os.cpu_count() // 2),  # Efficient CPU usage
+        # 'num_workers': min(4, os.cpu_count() // 2),
+        #   # Efficient CPU usage
+        'num_workers': 8,
         'pin_memory': torch.cuda.is_available(),     # Optimize GPU transfers
-        'prefetch_factor': 2,
+        'prefetch_factor': 4,
     }
 
     train_loader = DataLoader(train_dataset, shuffle=True, **loader_args)
