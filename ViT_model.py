@@ -68,10 +68,11 @@ class ViTGuitarTabModel(nn.Module):
     def forward(self, x):
         # Preprocess and reshape for ViT
         x = self.reshape_for_vit(x)
-
+        batch_size = x.shape[0]
+        if x.shape[1] == 1:  # Single channel
+            x = x.repeat(1, 3, 1, 1)  # Repeat to 3 channels
         # Process with ViT
         # inputs = self.processor(images=x, return_tensors="pt")
-        batch_size = x.shape[0]
     
         # Print shape information for debugging
         print(f"Input tensor shape: {x.shape}")
