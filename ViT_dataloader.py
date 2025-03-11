@@ -6,7 +6,7 @@ from transformers import ViTImageProcessor
 
 
 class GuitarTabDataset(Dataset):
-    def __init__(self, audio_dir, annotation_dir, img_size=(128, 128)):
+    def __init__(self, audio_dir, annotation_dir, img_size=(224, 224)):
         self.audio_files = sorted([f for f in os.listdir(audio_dir) if f.endswith('.npy')])
         self.annotation_files = sorted([f for f in os.listdir(annotation_dir) if f.endswith('.npy')])
 
@@ -56,7 +56,7 @@ class GuitarTabDataset(Dataset):
         return audio_tensor, heads
 
 
-def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8, val_ratio=0.1, img_size=(128, 128)):
+def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8, val_ratio=0.1, img_size=(224, 224)):
     dataset = GuitarTabDataset(audio_dir, annotation_dir, img_size)
 
     # Split dataset into train, validation, and test
