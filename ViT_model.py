@@ -70,8 +70,16 @@ class ViTGuitarTabModel(nn.Module):
         x = self.reshape_for_vit(x)
 
         # Process with ViT
-        inputs = self.processor(images=x, return_tensors="pt")
-        outputs = self.vit(**inputs)
+        # inputs = self.processor(images=x, return_tensors="pt")
+        batch_size = x.shape[0]
+    
+        # Print shape information for debugging
+        print(f"Input tensor shape: {x.shape}")
+        
+        # # Normalize data to [0, 1] range (if not already done in preprocessing)
+        # x_normalized = (x + 120) / 120
+        # x_normalized = torch.clamp(x_normalized, 0, 1)
+        outputs = self.vit(pixel_values=x)
 
         # Extract [CLS] token representation
         x = outputs.last_hidden_state[:, 0]  # Shape: [batch_size, hidden_size]

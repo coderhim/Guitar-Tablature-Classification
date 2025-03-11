@@ -232,6 +232,12 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.scatter_(1, target.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
+def check_tensor(tensor, name="Input"):
+    print(f"{name} shape: {tensor.shape}")
+    print(f"{name} min: {tensor.min().item()}, max: {tensor.max().item()}")
+    print(f"{name} mean: {tensor.mean().item()}, std: {tensor.std().item()}")
+    print(f"{name} unique values: {torch.unique(tensor).shape[0]}")
+
 def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.0005):
     # Initialize optimizer with weight decay for regularization
     # Use a lower learning rate for the pre-trained model
@@ -292,6 +298,7 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             optimizer.zero_grad()
             
             # Forward pass
+            check_tensor(inputs, "Model input")
             outputs = model(inputs)
             
             # Calculate loss

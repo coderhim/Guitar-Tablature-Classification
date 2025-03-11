@@ -15,7 +15,6 @@ class GuitarTabDataset(Dataset):
         self.audio_dir = audio_dir
         self.annotation_dir = annotation_dir
         self.img_size = img_size
-        self.processor = ViTImageProcessor.from_pretrained('facebook/dino-vits8')
 
     def __len__(self):
         return len(self.audio_files)
@@ -25,26 +24,36 @@ class GuitarTabDataset(Dataset):
         annotation_path = os.path.join(self.annotation_dir, self.annotation_files[idx])
 
         # Load CQT spectrogram and annotations
-        audio = np.load(audio_path, mmap_mode='r').astype(np.float32)  # Already dB normalized
-        annotation = np.load(annotation_path, mmap_mode='r').astype(np.float32)
+        audio = np.load(audio_path).astype(np.float32)  # CQT data in dB scale
+        annotation = np.load(annotation_path).astype(np.float32)
 
-        # Ensure tensors are contiguous for better performance
-        audio = torch.tensor(np.ascontiguousarray(audio))
+        # Normalize the CQT data to [0, 1] range
+        audio_normalized = (audio + 120) / 120  # Assuming the minimum is -120 dB
+        audio_normalized = np.clip(audio_normalized, 0, 1)
+        
+        # Convert to tensor
+        audio_tensor = torch.tensor(audio_normalized)
+        
+        # Add channel dimension if needed
+        if len(audio_tensor.shape) == 2:  # (H, W)
+            audio_tensor = audio_tensor.unsqueeze(0)  # (1, H, W)
+        
+        # Resize to the target image size
+        audio_tensor = torch.nn.functional.interpolate(
+            audio_tensor.unsqueeze(0),  # Add batch dimension for interpolate
+            size=self.img_size, 
+            mode='bicubic', 
+            align_corners=False
+        ).squeeze(0)  # Remove batch dimension
+        
+        # Convert to 3 channels for ViT (typically expects RGB)
+        # if audio_tensor.shape[0] == 1:
+            # audio_tensor = audio_tensor.repeat(3, 1, 1)  # (1, H, W) → (3, H, W)
 
-        # Ensure 3-channel input for ViT (ViT expects RGB-like inputs)
-        audio = audio.unsqueeze(0)  # (H, W) → (1, H, W)
-        # audio = audio.repeat(3, 1, 1)  # (1, H, W) → (3, H, W)
-
-        # Resize using bicubic interpolation
-        audio = torch.nn.functional.interpolate(audio.unsqueeze(0), size=self.img_size, mode='bicubic', align_corners=False).squeeze(0)
-
-        # Use ViTImageProcessor for final formatting (normalization, channel order)
-        audio = self.processor(images=audio.permute(1, 2, 0).numpy(), return_tensors="pt")["pixel_values"].squeeze(0)
-
-        # Ensure annotation tensors are also contiguous (6 heads for guitar strings)
-        heads = [torch.tensor(np.ascontiguousarray(annotation[i])).unsqueeze(0) for i in range(6)]
-
-        return audio, heads
+        # Process annotations (6 strings for guitar)
+        heads = [torch.tensor(annotation[i]).long() for i in range(6)]  # Convert to long for classification
+        
+        return audio_tensor, heads
 
 
 def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8, val_ratio=0.1, img_size=(128, 128)):
@@ -55,15 +64,22 @@ def create_dataloaders(audio_dir, annotation_dir, batch_size=32, train_ratio=0.8
     val_size = int(val_ratio * len(dataset))
     test_size = len(dataset) - train_size - val_size
 
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
+    # Use a fixed random seed for reproducible splits
+    generator = torch.Generator().manual_seed(42)
+    train_dataset, val_dataset, test_dataset = random_split(
+        dataset, [train_size, val_size, test_size], generator=generator
+    )
 
     # DataLoader configuration
     loader_args = {
         'batch_size': batch_size,
-        'num_workers': min(8, os.cpu_count() or 1),
+        'num_workers': min(4, os.cpu_count() or 1),
         'pin_memory': torch.cuda.is_available(),
-        'prefetch_factor': 2,
     }
+    
+    # Add prefetch_factor only if num_workers > 0
+    if loader_args['num_workers'] > 0:
+        loader_args['prefetch_factor'] = 2
 
     train_loader = DataLoader(train_dataset, shuffle=True, **loader_args)
     val_loader = DataLoader(val_dataset, shuffle=False, **loader_args)
