@@ -47,8 +47,8 @@ class GuitarTabDataset(Dataset):
         ).squeeze(0)  # Remove batch dimension
         
         # Convert to 3 channels for ViT (typically expects RGB)
-        # if audio_tensor.shape[0] == 1:
-            # audio_tensor = audio_tensor.repeat(3, 1, 1)  # (1, H, W) → (3, H, W)
+        if audio_tensor.shape[0] == 1:
+            audio_tensor = audio_tensor.repeat(3, 1, 1)  # (1, H, W) → (3, H, W)
 
         # Process annotations (6 strings for guitar)
         heads = [torch.tensor(annotation[i]).long() for i in range(6)]  # Convert to long for classification
