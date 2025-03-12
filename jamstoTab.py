@@ -328,7 +328,7 @@ def align_existing_segments(audio_segments_folder, jams_folder, tab_output_folde
     # Group segment files by original audio file
     segment_groups = {}
     for segment_file in os.listdir(audio_segments_folder):
-        if not segment_file.endswith('.npy'):
+        if not segment_file.endswith('.png'):
             continue
         
         # Parse segment information
@@ -372,7 +372,7 @@ if __name__ == '__main__':
     # process_aligned_dataset(audio_folder, jams_folder, output_folder)
     
     # Option 2: If you already have CQT segments and just need matching tablatures
-    audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_audio"
+    audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_images"
     jams_folder = r"D:\Code playground\seminar_audioTab_\annotation"
     tab_output_folder = r"D:\Code playground\seminar_audioTab_\tablature_segments"
     # audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_audio"
