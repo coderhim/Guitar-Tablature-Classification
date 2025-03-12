@@ -6,7 +6,7 @@ import os
 class GuitarTabDataset(Dataset):
     def __init__(self, audio_dir, annotation_dir):
         self.audio_files = sorted([f for f in os.listdir(audio_dir) if f.endswith('.npy')])
-        self.annotation_files = sorted([f for f in os.listdir(annotation_dir) if f.endswith('.npy')])
+        self.annotation_files = sorted([f for f in os.listdir(annotation_dir) if f.endswith('.png')])
 
         assert len(self.audio_files) == len(self.annotation_files), "Mismatch in audio and annotation file counts."
 
