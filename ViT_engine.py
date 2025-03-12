@@ -358,8 +358,7 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
         print(f"Epoch [{epoch + 1}/{epochs}], "
               f"Train Loss: {avg_train_loss:.4f}, "
               f"Val Loss: {val_loss:.4f}, "
-              f"Time: {epoch_time:.2f}s, "
-              f"LR: {optimizer.param_groups[1]['lr']:.6f}")
+              f"Time: {epoch_time:.2f}s")
         
         # Save model if it's the best so far
         if val_loss < best_val_loss:
