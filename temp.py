@@ -32,7 +32,7 @@ def sync_folders(folder1, folder2):
     print("Folder synchronization complete.")
 
 # Example usage
-folder1 = r'D:\Code playground\seminar_audioTab_\cqt_audio'
+folder1 = r'D:\Code playground\seminar_audioTab_\cqt_images'
 folder2 = r'D:\Code playground\seminar_audioTab_\tablature_segments'
 
 sync_folders(folder1, folder2)

@@ -572,7 +572,7 @@ def main():
     print(model)
     
     # Load data
-    image_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
+    image_dir = r'/content/Guitar-Tablature-Classification/cqt_images'
     annotation_dir = r'/content/Guitar-Tablature-Classification/tablature_segments'
 
     train_loader, val_loader, test_loader = create_dataloaders(image_dir, annotation_dir)

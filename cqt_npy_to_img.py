@@ -34,6 +34,6 @@ def convert_npy_to_images(input_folder, output_folder, num_workers=8):
     print(f"✅ Conversion complete. Saved {len(results)} images to {output_folder}")
 
 # Example usage
-input_folder = "D:/Code playground/seminar_audioTab_/cqt_audio"
+input_folder = "D:/Code playground/seminar_audioTab_/cqt_images"
 output_folder = "D:/Code playground/seminar_audioTab_/cqt_images"
 convert_npy_to_images(input_folder, output_folder, num_workers=12)

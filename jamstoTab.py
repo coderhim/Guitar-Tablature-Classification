@@ -375,7 +375,7 @@ if __name__ == '__main__':
     audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_images"
     jams_folder = r"D:\Code playground\seminar_audioTab_\annotation"
     tab_output_folder = r"D:\Code playground\seminar_audioTab_\tablature_segments"
-    # audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_audio"
+    # audio_segments_folder = r"D:\Code playground\seminar_audioTab_\cqt_images"
     # jams_folder = r"D:\Code playground\seminar_audioTab_\annotation"
     # tab_output_folder = r"D:\Code playground\seminar_audioTab_\tablature_segments"
     
