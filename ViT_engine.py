@@ -13,6 +13,7 @@ from tqdm import tqdm
 from my_dataloader import create_dataloaders
 from transformers import ViTModel, ViTConfig, ViTFeatureExtractor
 from ViT_model import DinoGuitarTabModel
+from transformers import AutoModel, get_cosine_schedule_with_warmup
 # Set seeds for reproducibility
 def set_seed(seed=42):
     random.seed(seed)
@@ -241,18 +242,21 @@ def check_tensor(tensor, name="Input"):
 def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.0005):
     # Initialize optimizer with weight decay for regularization
     # Use a lower learning rate for the pre-trained model
-    optimizer = torch.optim.AdamW([
-        {'params': model.vit.parameters(), 'lr': lr / 10},  # Lower LR for pre-trained parameters
-        {'params': model.fc1.parameters()},
-        {'params': model.fc2.parameters()},
-        {'params': model.bn_fc1.parameters()},
-        {'params': model.bn_fc2.parameters()},
-        {'params': model.string_heads.parameters()}
-    ], lr=lr, weight_decay=1e-4)
+    # optimizer = torch.optim.AdamW([
+    #     {'params': model.vit.parameters(), 'lr': lr / 10},  # Lower LR for pre-trained parameters
+    #     {'params': model.fc1.parameters()},
+    #     {'params': model.fc2.parameters()},
+    #     {'params': model.bn_fc1.parameters()},
+    #     {'params': model.bn_fc2.parameters()},
+    #     {'params': model.string_heads.parameters()}
+    # ], lr=lr, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.05)
     
     # Cosine annealing scheduler with warm restarts
-    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-6)
-    
+    # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-6)
+    total_steps = len(train_loader) * epochs
+    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=int(0.1 * total_steps), num_training_steps=total_steps)
+
     # Use label smoothing loss for better generalization
     criterion = LabelSmoothingLoss(classes=19, smoothing=0.1)
     
