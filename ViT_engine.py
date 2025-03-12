@@ -10,9 +10,9 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import time
 from tqdm import tqdm
-from ViT_dataloader import create_dataloaders
+from my_dataloader import create_dataloaders
 from transformers import ViTModel, ViTConfig, ViTFeatureExtractor
-from ViT_model import ViTGuitarTabModel
+from ViT_model import DinoGuitarTabModel
 # Set seeds for reproducibility
 def set_seed(seed=42):
     random.seed(seed)
@@ -22,7 +22,7 @@ def set_seed(seed=42):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-set_seed()
+# set_seed()
 
 # Keep the data augmentation and normalization functions from your original code
 def time_shift(audio, shift_range=0.1):
@@ -561,20 +561,21 @@ def main():
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    
+    set_seed()
     # Create model and move to device
     # model = ViTGuitarTabModel(num_classes=19, pretrained_model="google/vit-base-patch16-224")
     # Instantiate the model using facebook/dino-vit-small-patch8
-    model = ViTGuitarTabModel(num_classes=19, pretrained_model="facebook/dino-vits8")
+    # model = DinoGuitarTabModel(num_classes=19, pretrained_model="facebook/dino-vits8")
+    model = DinoGuitarTabModel()
 
     model = model.to(device)
     print(model)
     
     # Load data
-    audio_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
+    image_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
     annotation_dir = r'/content/Guitar-Tablature-Classification/tablature_segments'
 
-    train_loader, val_loader, test_loader = create_dataloaders(audio_dir, annotation_dir)
+    train_loader, val_loader, test_loader = create_dataloaders(image_dir, annotation_dir)
     
     # Train the model
     trained_model, best_epoch, final_accuracies = train_model(

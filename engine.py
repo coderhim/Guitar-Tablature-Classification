@@ -217,7 +217,7 @@ def test_model(model, test_loader, device):
 
 if __name__ == '__main__':
     # Load data
-    audio_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
+    image_dir = r'/content/Guitar-Tablature-Classification/cqt_audio'
     annotation_dir = r'/content/Guitar-Tablature-Classification/tablature_segments'
     set_seed()
     train_loader, val_loader, test_loader = my_dataloader.create_dataloaders(audio_dir, annotation_dir)
