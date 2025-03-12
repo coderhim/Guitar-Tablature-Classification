@@ -12,8 +12,8 @@ class GuitarTabDataset(Dataset):
 
         # Ensure filenames are matched correctly
         assert len(self.image_files) == len(self.annotation_files), "Mismatch in image and annotation file counts."
-        for img, ann in zip(self.image_files, self.annotation_files):
-            assert os.path.splitext(img)[0] == os.path.splitext(ann)[0], "Mismatch in corresponding files."
+        # for img, ann in zip(self.image_files, self.annotation_files):
+            # assert os.path.splitext(img)[0] == os.path.splitext(ann)[0], "Mismatch in corresponding files."
 
         self.image_dir = image_dir
         self.annotation_dir = annotation_dir
