@@ -14,6 +14,15 @@ from my_dataloader import create_dataloaders
 from transformers import ViTModel, ViTConfig, ViTFeatureExtractor
 from ViT_model import DinoGuitarTabModel
 from transformers import AutoModel, get_cosine_schedule_with_warmup
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import f1_score, precision_score, recall_score, confusion_matrix, classification_report
+import torch
+from matplotlib.ticker import MaxNLocator
+import pandas as pd
+from tqdm import tqdm
+import time
 # Set seeds for reproducibility
 def set_seed(seed=42):
     random.seed(seed)
@@ -239,24 +248,14 @@ def check_tensor(tensor, name="Input"):
     print(f"{name} mean: {tensor.mean().item()}, std: {tensor.std().item()}")
     print(f"{name} unique values: {torch.unique(tensor).shape[0]}")
 
+
+
 def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.0005):
     # Initialize optimizer with weight decay for regularization
-    # Use a lower learning rate for the pre-trained model
-    # optimizer = torch.optim.AdamW([
-    #     {'params': model.vit.parameters(), 'lr': lr / 10},  # Lower LR for pre-trained parameters
-    #     {'params': model.fc1.parameters()},
-    #     {'params': model.fc2.parameters()},
-    #     {'params': model.bn_fc1.parameters()},
-    #     {'params': model.bn_fc2.parameters()},
-    #     {'params': model.string_heads.parameters()}
-    # ], lr=lr, weight_decay=1e-4)
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.05)
     
-    # Cosine annealing scheduler with warm restarts
-    # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-6)
     total_steps = len(train_loader) * epochs
     scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=int(0.1 * total_steps), num_training_steps=total_steps)
-
     # Use label smoothing loss for better generalization
     criterion = LabelSmoothingLoss(classes=19, smoothing=0.1)
     
@@ -264,6 +263,9 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
     train_losses = []
     val_losses = []
     string_accuracies = [[] for _ in range(6)]
+    string_f1_scores = [[] for _ in range(6)]
+    string_precisions = [[] for _ in range(6)]
+    string_recalls = [[] for _ in range(6)]
     best_val_loss = float('inf')
     patience = 10  # for early stopping
     counter = 0
@@ -284,12 +286,6 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             if inputs.dim() == 3:
                 inputs = inputs.unsqueeze(1)  # (batch, 1, time, freq)
                 
-            # Apply data augmentation
-            # inputs = augment_batch(inputs)
-            # print(inputs.shape)
-            # Apply normalization
-            # inputs = db_normalize(inputs)
-            
             # Process labels
             target_indices = []
             for label in labels:
@@ -302,7 +298,6 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             optimizer.zero_grad()
             
             # Forward pass
-            # check_tensor(inputs, "Model input")
             outputs = model(inputs)
             
             # Calculate loss
@@ -344,11 +339,15 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
         train_losses.append(avg_train_loss)
         
         # Validation phase
-        val_loss, accuracies = validate_model(model, val_loader, criterion, device)
+        val_metrics = validate_model(model, val_loader, criterion, device)
+        val_loss, accuracies, f1_scores, precisions, recalls = val_metrics
         val_losses.append(val_loss)
         
-        for i, acc in enumerate(accuracies):
-            string_accuracies[i].append(acc)
+        for i in range(6):
+            string_accuracies[i].append(accuracies[i])
+            string_f1_scores[i].append(f1_scores[i])
+            string_precisions[i].append(precisions[i])
+            string_recalls[i].append(recalls[i])
         
         # Step the scheduler
         scheduler.step()
@@ -360,6 +359,11 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
               f"Val Loss: {val_loss:.4f}, "
               f"Time: {epoch_time:.2f}s")
         
+        # Print F1 scores for each string
+        print("F1 Scores:")
+        for i, f1 in enumerate(f1_scores):
+            print(f"  String {i+1}: {f1:.4f}")
+        
         # Save model if it's the best so far
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -369,7 +373,10 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'val_loss': val_loss,
-                'accuracies': accuracies
+                'accuracies': accuracies,
+                'f1_scores': f1_scores,
+                'precisions': precisions,
+                'recalls': recalls
             }, 'best_vit_guitar_tab_model.pt')
             print(f"Model saved with validation loss: {val_loss:.4f}")
             counter = 0  # Reset early stopping counter
@@ -382,20 +389,21 @@ def train_model(model, train_loader, val_loader, epochs=30, device='cuda', lr=0.
             break
     
     # Plot training metrics
-    plot_training_metrics(train_losses, val_losses, string_accuracies)
+    plot_training_metrics(train_losses, val_losses, string_accuracies, 
+                         string_f1_scores, string_precisions, string_recalls)
     
     # Load the best model for final evaluation
     checkpoint = torch.load('best_vit_guitar_tab_model.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
     
-    return model, checkpoint['epoch'], checkpoint['accuracies']
+    return model, checkpoint['epoch'], checkpoint['accuracies'], checkpoint['f1_scores']
 
 def validate_model(model, val_loader, criterion, device):
     model.eval()
     total_loss = 0
     batch_count = 0
     
-    # Initialize accuracy and confusion matrix trackers
+    # Initialize accuracy and metrics trackers
     correct = [0] * 6
     total = [0] * 6
     all_preds = [[] for _ in range(6)]
@@ -445,7 +453,7 @@ def validate_model(model, val_loader, criterion, device):
                         correct[i] += (predicted == target).sum().item()
                         total[i] += target.size(0)
                         
-                        # Store predictions and targets for confusion matrix
+                        # Store predictions and targets for confusion matrix and other metrics
                         all_preds[i].extend(predicted.cpu().numpy())
                         all_targets[i].extend(target.cpu().numpy())
                 except Exception as e:
@@ -461,74 +469,266 @@ def validate_model(model, val_loader, criterion, device):
     avg_loss = total_loss / max(batch_count, 1)
     print(f"Validation Loss: {avg_loss:.4f}")
     
-    # Calculate and print accuracy for each string
+    # Calculate metrics for each string
     accuracies = []
+    f1_scores = []
+    precisions = []
+    recalls = []
+    
     for i in range(6):
         if total[i] > 0:
+            # Calculate accuracy
             accuracy = 100 * correct[i] / total[i]
             accuracies.append(accuracy)
-            print(f"Accuracy for string {i+1}: {accuracy:.2f}%")
+            
+            # Calculate F1, precision, and recall (with handling for potential warnings)
+            if len(all_targets[i]) > 0 and len(np.unique(all_targets[i])) > 1:
+                # For macro averaging (treats all classes equally regardless of imbalance)
+                f1 = f1_score(all_targets[i], all_preds[i], average='macro')
+                precision = precision_score(all_targets[i], all_preds[i], average='macro')
+                recall = recall_score(all_targets[i], all_preds[i], average='macro')
+            else:
+                f1, precision, recall = 0, 0, 0
+                
+            f1_scores.append(f1)
+            precisions.append(precision)
+            recalls.append(recall)
+            
+            print(f"String {i+1} - Accuracy: {accuracy:.2f}%, F1: {f1:.4f}, "
+                  f"Precision: {precision:.4f}, Recall: {recall:.4f}")
         else:
             accuracies.append(0)
-            print(f"Accuracy for string {i+1}: N/A (no samples)")
+            f1_scores.append(0)
+            precisions.append(0)
+            recalls.append(0)
+            print(f"String {i+1}: N/A (no samples)")
     
-    # Generate confusion matrices
+    # Generate confusion matrices and classification reports
     plot_confusion_matrices(all_preds, all_targets)
+    print_classification_reports(all_preds, all_targets)
     
-    return avg_loss, accuracies
+    return avg_loss, accuracies, f1_scores, precisions, recalls
 
-# Keep these functions from your original code
-def plot_training_metrics(train_losses, val_losses, string_accuracies):
-    """Plot training and validation metrics."""
-    plt.figure(figsize=(15, 10))
+def print_classification_reports(all_preds, all_targets):
+    """Print detailed classification reports for each string."""
+    print("\n=== Classification Reports ===")
     
-    # Plot losses
-    plt.subplot(2, 1, 1)
-    plt.plot(train_losses, label='Training Loss')
-    plt.plot(val_losses, label='Validation Loss')
+    for i in range(6):
+        if len(all_targets[i]) > 0 and len(all_preds[i]) > 0:
+            print(f"\nString {i+1} Classification Report:")
+            try:
+                report = classification_report(all_targets[i], all_preds[i])
+                print(report)
+            except Exception as e:
+                print(f"Could not generate report: {e}")
+        else:
+            print(f"\nString {i+1}: No data available")
+
+def plot_training_metrics(train_losses, val_losses, string_accuracies, 
+                         string_f1_scores, string_precisions, string_recalls):
+    """
+    Plot training metrics including loss, accuracy, F1 score, precision, and recall.
+    """
+    epochs = range(1, len(train_losses) + 1)
+    
+    plt.figure(figsize=(20, 15))
+    
+    # Plot loss
+    plt.subplot(2, 2, 1)
+    plt.plot(epochs, train_losses, 'b-', label='Training Loss')
+    plt.plot(epochs, val_losses, 'r-', label='Validation Loss')
     plt.title('Training and Validation Loss')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
     plt.grid(True)
     
-    # Plot accuracies
-    plt.subplot(2, 1, 2)
-    for i, accs in enumerate(string_accuracies):
-        plt.plot(accs, label=f'String {i+1}')
-    plt.title('Validation Accuracy by String')
+    # Plot accuracy
+    plt.subplot(2, 2, 2)
+    for i in range(6):
+        plt.plot(epochs, string_accuracies[i], label=f'String {i+1}')
+    plt.title('Validation Accuracy per String')
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy (%)')
     plt.legend()
     plt.grid(True)
     
+    # Plot F1 scores
+    plt.subplot(2, 2, 3)
+    for i in range(6):
+        plt.plot(epochs, string_f1_scores[i], label=f'String {i+1}')
+    plt.title('F1 Scores per String')
+    plt.xlabel('Epochs')
+    plt.ylabel('F1 Score')
+    plt.legend()
+    plt.grid(True)
+    
+    # Plot precision and recall
+    plt.subplot(2, 2, 4)
+    
+    # Create two separate line styles for precision and recall
+    for i in range(6):
+        plt.plot(epochs, string_precisions[i], linestyle='-', 
+                marker='o', markersize=3, label=f'Precision String {i+1}')
+        plt.plot(epochs, string_recalls[i], linestyle='--', 
+                marker='x', markersize=3, label=f'Recall String {i+1}')
+    
+    plt.title('Precision and Recall per String')
+    plt.xlabel('Epochs')
+    plt.ylabel('Score')
+    plt.legend(fontsize='small')
+    plt.grid(True)
+    
     plt.tight_layout()
+    plt.savefig('training_metrics.png', dpi=300)
     plt.show()
-    plt.savefig('vit_training_metrics.png')
-    plt.close()
+    
+    # Additional plots for detailed per-string metrics
+    plot_detailed_string_metrics(epochs, string_accuracies, string_f1_scores, 
+                               string_precisions, string_recalls)
+
+def plot_detailed_string_metrics(epochs, string_accuracies, string_f1_scores, 
+                               string_precisions, string_recalls):
+    """Create detailed per-string metric plots."""
+    for i in range(6):
+        plt.figure(figsize=(15, 10))
+        
+        plt.subplot(2, 2, 1)
+        plt.plot(epochs, string_accuracies[i], 'b-')
+        plt.title(f'String {i+1} Accuracy')
+        plt.xlabel('Epochs')
+        plt.ylabel('Accuracy (%)')
+        plt.grid(True)
+        
+        plt.subplot(2, 2, 2)
+        plt.plot(epochs, string_f1_scores[i], 'g-')
+        plt.title(f'String {i+1} F1 Score')
+        plt.xlabel('Epochs')
+        plt.ylabel('F1 Score')
+        plt.grid(True)
+        
+        plt.subplot(2, 2, 3)
+        plt.plot(epochs, string_precisions[i], 'r-')
+        plt.title(f'String {i+1} Precision')
+        plt.xlabel('Epochs')
+        plt.ylabel('Precision')
+        plt.grid(True)
+        
+        plt.subplot(2, 2, 4)
+        plt.plot(epochs, string_recalls[i], 'm-')
+        plt.title(f'String {i+1} Recall')
+        plt.xlabel('Epochs')
+        plt.ylabel('Recall')
+        plt.grid(True)
+        
+        plt.tight_layout()
+        plt.savefig(f'string_{i+1}_metrics.png', dpi=300)
+        plt.close()
 
 def plot_confusion_matrices(all_preds, all_targets):
-    """Plot confusion matrices for each string."""
-    plt.figure(figsize=(20, 15))
-    
+    """Plot confusion matrices for each string with improved visualization."""
     for i in range(6):
-        if len(all_preds[i]) > 0:
-            cm = confusion_matrix(all_targets[i], all_preds[i])
-            plt.subplot(2, 3, i+1)
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-            plt.title(f'Confusion Matrix - String {i+1}')
-            plt.xlabel('Predicted')
-            plt.ylabel('True')
-    
-    plt.tight_layout()
-    plt.show()
-    plt.savefig('vit_confusion_matrices.png')
-    plt.close()
+        if len(all_targets[i]) > 0 and len(all_preds[i]) > 0:
+            # Get all unique classes
+            classes = sorted(list(set(all_targets[i] + all_preds[i])))
+            
+            if len(classes) > 1:  # Only create matrix if we have multiple classes
+                cm = confusion_matrix(all_targets[i], all_preds[i], labels=classes)
+                
+                # Create a normalized version for easier interpretation
+                cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+                cm_normalized = np.nan_to_num(cm_normalized)  # Replace NaN with 0
+                
+                # Plot the confusion matrix
+                plt.figure(figsize=(10, 8))
+                
+                # Plot the raw counts
+                plt.subplot(1, 2, 1)
+                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                          xticklabels=classes, yticklabels=classes)
+                plt.title(f'String {i+1} Confusion Matrix (Counts)')
+                plt.xlabel('Predicted')
+                plt.ylabel('True')
+                
+                # Plot the normalized percentages
+                plt.subplot(1, 2, 2)
+                sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='Blues', 
+                          xticklabels=classes, yticklabels=classes)
+                plt.title(f'String {i+1} Confusion Matrix (Normalized)')
+                plt.xlabel('Predicted')
+                plt.ylabel('True')
+                
+                plt.tight_layout()
+                plt.savefig(f'string_{i+1}_confusion_matrix.png', dpi=300)
+                plt.close()
+
+# Additional function to generate per-class metrics for better understanding
+def plot_per_class_metrics(all_preds, all_targets):
+    """Plot per-class metrics for each string."""
+    for i in range(6):
+        if len(all_targets[i]) == 0 or len(np.unique(all_targets[i])) <= 1:
+            continue
+            
+        # Get all unique classes
+        classes = sorted(list(set(all_targets[i])))
+        
+        # Calculate per-class precision, recall, and F1
+        precisions = []
+        recalls = []
+        f1s = []
+        
+        for cls in classes:
+            true_positives = sum((np.array(all_targets[i]) == cls) & (np.array(all_preds[i]) == cls))
+            false_positives = sum((np.array(all_targets[i]) != cls) & (np.array(all_preds[i]) == cls))
+            false_negatives = sum((np.array(all_targets[i]) == cls) & (np.array(all_preds[i]) != cls))
+            
+            precision = true_positives / max(true_positives + false_positives, 1)
+            recall = true_positives / max(true_positives + false_negatives, 1)
+            f1 = 2 * precision * recall / max(precision + recall, 1e-5)
+            
+            precisions.append(precision)
+            recalls.append(recall)
+            f1s.append(f1)
+        
+        # Create a DataFrame for easier plotting
+        metrics_df = pd.DataFrame({
+            'Class': classes,
+            'Precision': precisions,
+            'Recall': recalls,
+            'F1': f1s
+        })
+        
+        # Plot the metrics
+        plt.figure(figsize=(12, 6))
+        
+        # Sort by F1 score for better visualization
+        metrics_df = metrics_df.sort_values('F1', ascending=False)
+        
+        # Create a bar chart
+        x = np.arange(len(metrics_df))
+        width = 0.25
+        
+        plt.bar(x - width, metrics_df['Precision'], width, label='Precision')
+        plt.bar(x, metrics_df['Recall'], width, label='Recall')
+        plt.bar(x + width, metrics_df['F1'], width, label='F1')
+        
+        plt.xlabel('Class')
+        plt.ylabel('Score')
+        plt.title(f'String {i+1} Per-Class Metrics')
+        plt.xticks(x, metrics_df['Class'])
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f'string_{i+1}_per_class_metrics.png', dpi=300)
+        plt.close()
 
 def test_model(model, test_loader, device):
     model.eval()
     correct = [0] * 6
     total = [0] * 6
+    
+    # For storing predictions and targets for metric calculation
+    all_preds = [[] for _ in range(6)]
+    all_targets = [[] for _ in range(6)]
 
     with torch.no_grad():
         for inputs, labels in test_loader:
@@ -554,11 +754,188 @@ def test_model(model, test_loader, device):
                 _, predicted = torch.max(output, 1)
                 correct[i] += (predicted == target).sum().item()
                 total[i] += target.size(0)
+                
+                # Store predictions and targets for metrics
+                all_preds[i].extend(predicted.cpu().numpy())
+                all_targets[i].extend(target.cpu().numpy())
 
-    # Report accuracy
+    # Calculate and report all metrics
+    print("\n=== Test Results ===")
+    print("String | Accuracy | F1 Score | Precision | Recall")
+    print("------|----------|----------|-----------|-------")
+    
+    # For storing metrics to return
+    accuracies = []
+    f1_scores = []
+    precisions = []
+    recalls = []
+    
     for i in range(6):
-        accuracy = 100 * correct[i] / total[i] if total[i] > 0 else 0
-        print(f"Test Accuracy for string {i + 1}: {accuracy:.2f}%")
+        if total[i] > 0:
+            # Calculate accuracy
+            accuracy = 100 * correct[i] / total[i]
+            
+            # Calculate F1, precision, and recall
+            if len(all_targets[i]) > 0 and len(np.unique(all_targets[i])) > 1:
+                f1 = f1_score(all_targets[i], all_preds[i], average='macro')
+                precision = precision_score(all_targets[i], all_preds[i], average='macro')
+                recall = recall_score(all_targets[i], all_preds[i], average='macro')
+            else:
+                f1, precision, recall = 0, 0, 0
+                
+            accuracies.append(accuracy)
+            f1_scores.append(f1)
+            precisions.append(precision)
+            recalls.append(recall)
+            
+            print(f"  {i+1}   | {accuracy:6.2f}% | {f1:.4f}   | {precision:.4f}    | {recall:.4f}")
+        else:
+            accuracies.append(0)
+            f1_scores.append(0)
+            precisions.append(0)
+            recalls.append(0)
+            print(f"  {i+1}   | N/A       | N/A      | N/A        | N/A")
+    
+    # Generate confusion matrices and classification reports
+    plot_confusion_matrices(all_preds, all_targets)
+    print_classification_reports(all_preds, all_targets)
+    
+    # Plot per-class metrics for deeper analysis
+    plot_per_class_metrics(all_preds, all_targets)
+    
+    # Calculate overall metrics (averaged across all strings)
+    overall_accuracy = sum([acc * tot for acc, tot in zip(accuracies, total)]) / sum(total) if sum(total) > 0 else 0
+    overall_f1 = sum(f1_scores) / sum(1 for f1 in f1_scores if f1 > 0) if any(f1 > 0 for f1 in f1_scores) else 0
+    overall_precision = sum(precisions) / sum(1 for p in precisions if p > 0) if any(p > 0 for p in precisions) else 0
+    overall_recall = sum(recalls) / sum(1 for r in recalls if r > 0) if any(r > 0 for r in recalls) else 0
+    
+    print("\n=== Overall Model Performance ===")
+    print(f"Overall Accuracy: {overall_accuracy:.2f}%")
+    print(f"Overall F1 Score: {overall_f1:.4f}")
+    print(f"Overall Precision: {overall_precision:.4f}")
+    print(f"Overall Recall: {overall_recall:.4f}")
+    
+    # Generate summary visualization
+    plot_test_results_summary(accuracies, f1_scores, precisions, recalls)
+    
+    return accuracies, f1_scores, precisions, recalls
+
+def plot_test_results_summary(accuracies, f1_scores, precisions, recalls):
+    """Create a summary visualization of test results."""
+    plt.figure(figsize=(12, 8))
+    
+    strings = [f"String {i+1}" for i in range(6)]
+    x = np.arange(len(strings))
+    width = 0.2
+    
+    # Convert accuracy to same scale as other metrics (0-1)
+    normalized_accuracies = [acc/100 for acc in accuracies]
+    
+    plt.bar(x - width*1.5, normalized_accuracies, width, label='Accuracy', color='blue')
+    plt.bar(x - width/2, f1_scores, width, label='F1 Score', color='green')
+    plt.bar(x + width/2, precisions, width, label='Precision', color='red')
+    plt.bar(x + width*1.5, recalls, width, label='Recall', color='purple')
+    
+    plt.xlabel('Guitar String')
+    plt.ylabel('Score')
+    plt.title('Test Metrics by Guitar String')
+    plt.xticks(x, strings)
+    plt.legend()
+    plt.ylim(0, 1.0)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Add value labels on top of each bar
+    for i, v in enumerate(normalized_accuracies):
+        plt.text(i - width*1.5, v + 0.02, f"{accuracies[i]:.1f}%", ha='center', fontsize=9)
+    
+    for i, v in enumerate(f1_scores):
+        plt.text(i - width/2, v + 0.02, f"{v:.2f}", ha='center', fontsize=9)
+        
+    for i, v in enumerate(precisions):
+        plt.text(i + width/2, v + 0.02, f"{v:.2f}", ha='center', fontsize=9)
+        
+    for i, v in enumerate(recalls):
+        plt.text(i + width*1.5, v + 0.02, f"{v:.2f}", ha='center', fontsize=9)
+    
+    plt.tight_layout()
+    plt.savefig('test_results_summary.png', dpi=300)
+    plt.show()
+
+# Create a function to generate ROC curves for each string (if applicable)
+def plot_roc_curves(model, test_loader, device):
+    """Plot ROC curves for each string if possible."""
+    from sklearn.metrics import roc_curve, auc
+    
+    model.eval()
+    
+    # For storing probabilities and true labels
+    all_probs = [[] for _ in range(6)]
+    all_labels = [[] for _ in range(6)]
+    
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs = inputs.to(device)
+            
+            # Ensure correct input shape
+            if inputs.dim() == 3:
+                inputs = inputs.unsqueeze(1)
+                
+            outputs = model(inputs)
+            
+            # Process labels
+            target_indices = []
+            for label in labels:
+                if label.dim() > 1 and label.shape[1] > 1:
+                    indices = torch.argmax(label, dim=1).to(device)
+                else:
+                    indices = label.to(device).long()
+                target_indices.append(indices)
+            
+            # Store softmax probabilities and true labels
+            for i, (output, target) in enumerate(zip(outputs, target_indices)):
+                probs = torch.nn.functional.softmax(output, dim=1).cpu().numpy()
+                all_probs[i].extend(probs)
+                all_labels[i].extend(target.cpu().numpy())
+    
+    # Plot ROC curves for each string
+    plt.figure(figsize=(15, 10))
+    
+    for i in range(6):
+        if len(all_labels[i]) > 0 and len(np.unique(all_labels[i])) > 1:
+            plt.subplot(2, 3, i+1)
+            
+            # Get all unique classes
+            classes = sorted(list(set(all_labels[i])))
+            
+            # One-vs-Rest ROC curve for each class
+            for c in classes:
+                # Convert to binary classification problem
+                y_true = np.array(all_labels[i]) == c
+                y_score = np.array(all_probs[i])[:, c]
+                
+                # Calculate ROC
+                fpr, tpr, _ = roc_curve(y_true, y_score)
+                roc_auc = auc(fpr, tpr)
+                
+                plt.plot(fpr, tpr, lw=2, 
+                        label=f'Class {c} (AUC = {roc_auc:.2f})')
+            
+            plt.plot([0, 1], [0, 1], 'k--', lw=2)
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title(f'String {i+1} ROC Curve')
+            plt.legend(loc="lower right", fontsize='small')
+        else:
+            plt.subplot(2, 3, i+1)
+            plt.text(0.5, 0.5, 'Insufficient data', 
+                    horizontalalignment='center', verticalalignment='center')
+            plt.title(f'String {i+1}')
+    
+    plt.tight_layout()
+    plt.savefig('roc_curves.png', dpi=300)
+    plt.show()
 
 def main():
     # Set device
